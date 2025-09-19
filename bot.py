@@ -18,9 +18,9 @@ MOVIES = [
     }
 ]
 
-# 🔹 Telegram Bot Config (HARDCODED)
-BOT_TOKEN = "8377818111:AAGBC3dv55LdiS7Qv_V5wLnNoEIF2fYxKCw"
-CHAT_ID = "1827266917"
+# 🔹 Telegram Bot Config 
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+CHAT_ID = os.environ.get("CHAT_ID")
 
 # 🔹 Test Mode: True = simulate, False = real check
 TEST_MODE = False
@@ -88,3 +88,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
