@@ -18,15 +18,12 @@ MOVIES = [
     }
 ]
 
-# 🔹 Telegram Bot Config 
+# 🔹 Telegram Bot Config
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 
-# 🔹 Test Mode: True = simulate tickets, False = real check
+# 🔹 Test Mode
 TEST_MODE = False
-
-# 🔹 Valid theatre names for District site
-VALID_THEATRES = ["sri rama", "svc"]  # add more exact theatre names if needed
 
 # 🔹 Send Telegram message
 def send_telegram(msg: str):
@@ -41,12 +38,17 @@ def send_telegram(msg: str):
 # 🔹 Check tickets availability
 def tickets_available(movie):
     if TEST_MODE:
-        return ["TEST THEATRE"]
+        # simulate tickets for testing
+        if movie["type"] == "district":
+            return ["Sri Rama Theatre", "SVC Theatre"]
+        elif movie["type"] == "bms":
+            return ["BMS Tickets"]
+        return []
 
     try:
         headers = {}
         if movie["type"] == "bms":
-            # 🔹 Mimic browser for BMS
+            # Fix BMS 403 issue by adding browser headers
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                               "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -61,9 +63,13 @@ def tickets_available(movie):
             theatre_divs = soup.find_all("div", string=True)
             available_theatres = []
             for div in theatre_divs:
-                text = div.get_text(strip=True).lower()
-                if any(keyword in text for keyword in VALID_THEATRES):
-                    available_theatres.append(text.title())
+                text = div.get_text(strip=True)
+                txt_lower = text.lower()
+                # Trigger rules: "sri" AND "tuni" OR "svc" AND "payakaraopeta"
+                if "sri" in txt_lower and "tuni" in txt_lower:
+                    available_theatres.append(text)
+                elif "svc" in txt_lower and "payakaraopeta" in txt_lower:
+                    available_theatres.append(text)
             return available_theatres
 
         elif movie["type"] == "bms":
@@ -71,6 +77,7 @@ def tickets_available(movie):
             return ["BMS Tickets"] if button else []
 
         return []
+
     except Exception as e:
         print(f"[ERROR] Failed to fetch {movie['name']}: {e}")
         return []
@@ -85,14 +92,12 @@ def main():
         for movie in MOVIES:
             available_theatres = tickets_available(movie)
 
-            # 🔹 If new tickets found, send alert
+            # Send alert only for **new** theatres
             new_theatres = [t for t in available_theatres if t not in last_state[movie["name"]]]
             for theatre in new_theatres:
                 send_telegram(f"🎟 {theatre} - Tickets Available! {movie['url']}")
 
-            # 🔹 Update last state
             last_state[movie["name"]] = available_theatres
-
             status = "AVAILABLE" if available_theatres else "NOT available"
             print(f"[CHECK] {now} - {movie['name']} {status}.")
 
