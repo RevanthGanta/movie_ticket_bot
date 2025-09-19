@@ -22,8 +22,11 @@ MOVIES = [
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 
-# 🔹 Test Mode: True = simulate, False = real check
+# 🔹 Test Mode: True = simulate tickets, False = real check
 TEST_MODE = False
+
+# 🔹 Valid theatre names for District site
+VALID_THEATRES = ["sri rama", "svc"]  # add more exact theatre names if needed
 
 # 🔹 Send Telegram message
 def send_telegram(msg: str):
@@ -38,10 +41,19 @@ def send_telegram(msg: str):
 # 🔹 Check tickets availability
 def tickets_available(movie):
     if TEST_MODE:
-        return True  # simulate tickets for testing
+        return ["TEST THEATRE"]
 
     try:
-        resp = requests.get(movie["url"], timeout=10)
+        headers = {}
+        if movie["type"] == "bms":
+            # 🔹 Mimic browser for BMS
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                              "AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/140.0.0.0 Safari/537.36"
+            }
+
+        resp = requests.get(movie["url"], timeout=10, headers=headers)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
 
@@ -49,9 +61,9 @@ def tickets_available(movie):
             theatre_divs = soup.find_all("div", string=True)
             available_theatres = []
             for div in theatre_divs:
-                text = div.get_text(strip=True)
-                if "sri" in text.lower() or "svc" in text.lower():
-                    available_theatres.append(text)
+                text = div.get_text(strip=True).lower()
+                if any(keyword in text for keyword in VALID_THEATRES):
+                    available_theatres.append(text.title())
             return available_theatres
 
         elif movie["type"] == "bms":
@@ -88,4 +100,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
