@@ -22,7 +22,7 @@ MOVIES = [
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 
-# 🔹 Test Mode
+# 🔹 Test Mode: True = simulate, False = real check
 TEST_MODE = False
 
 # 🔹 Send Telegram message
@@ -39,42 +39,48 @@ def send_telegram(msg: str):
 def tickets_available(movie):
     if TEST_MODE:
         # simulate tickets for testing
-        if movie["type"] == "district":
-            return ["Sri Rama Theatre", "SVC Theatre"]
-        elif movie["type"] == "bms":
+        if movie["type"] == "bms":
             return ["BMS Tickets"]
-        return []
+        else:
+            return ["Sri Rama Theatre", "SVC Theatre"]
 
     try:
-        headers = {}
         if movie["type"] == "bms":
-            # Fix BMS 403 issue by adding browser headers
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                               "AppleWebKit/537.36 (KHTML, like Gecko) "
-                              "Chrome/140.0.0.0 Safari/537.36"
+                              "Chrome/140.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Connection": "keep-alive",
+                "Referer": "https://in.bookmyshow.com/"
             }
-
-        resp = requests.get(movie["url"], timeout=10, headers=headers)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        if movie["type"] == "district":
-            theatre_divs = soup.find_all("div", string=True)
-            available_theatres = []
-            for div in theatre_divs:
-                text = div.get_text(strip=True)
-                txt_lower = text.lower()
-                # Trigger rules: "sri" AND "tuni" OR "svc" AND "payakaraopeta"
-                if "sri" in txt_lower and "tuni" in txt_lower:
-                    available_theatres.append(text)
-                elif "svc" in txt_lower and "payakaraopeta" in txt_lower:
-                    available_theatres.append(text)
-            return available_theatres
-
-        elif movie["type"] == "bms":
+            resp = requests.get(movie["url"], timeout=10, headers=headers)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
             button = soup.find("button", attrs={"data-phase": "postRelease"})
             return ["BMS Tickets"] if button else []
+
+        elif movie["type"] == "district":
+            resp = requests.get(movie["url"], timeout=10)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+            theatre_divs = soup.find_all("div", string=True)
+
+            sri_theatres = []
+            svc_theatres = []
+
+            for div in theatre_divs:
+                text = div.get_text(strip=True)
+                lower_text = text.lower()
+                # Sri + Tuni check
+                if "sri" in lower_text and "tuni" in lower_text:
+                    sri_theatres.append(text)
+                # SVC + Payakaraopeta check
+                if "svc" in lower_text and "payakaraopeta" in lower_text:
+                    svc_theatres.append(text)
+
+            return sri_theatres + svc_theatres
 
         return []
 
@@ -92,16 +98,17 @@ def main():
         for movie in MOVIES:
             available_theatres = tickets_available(movie)
 
-            # Send alert only for **new** theatres
+            # 🔹 Trigger only new notifications
             new_theatres = [t for t in available_theatres if t not in last_state[movie["name"]]]
             for theatre in new_theatres:
                 send_telegram(f"🎟 {theatre} - Tickets Available! {movie['url']}")
 
             last_state[movie["name"]] = available_theatres
+
             status = "AVAILABLE" if available_theatres else "NOT available"
             print(f"[CHECK] {now} - {movie['name']} {status}.")
 
-        time.sleep(60)
+        time.sleep(60)  # 1-minute loop
 
 if __name__ == "__main__":
     main()
